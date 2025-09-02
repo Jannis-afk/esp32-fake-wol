@@ -152,6 +152,8 @@ ifconfig
 
 ### Testing the Captive Portal
 
+If the ESP32 is conncted visit it via its IP Adress or at http://wol-esp.local
+
 If you're not seeing the captive portal login message, use these test files:
 
 **Python Test Script:**
@@ -197,6 +199,8 @@ Visit `http://[ESP32_IP]/status` to see WOL configuration and status
 ### Web Interface
 
 Once configured, access the controller at `http://[ESP32_IP_ADDRESS]`
+or at
+`http://wol-esp.local`
 
 The web interface provides:
 - **Current PC Status**: Real-time power state display with animated indicators
