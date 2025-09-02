@@ -19,38 +19,53 @@ A smart ESP32-based controller that sits inside your PC case and provides remote
 ## 🛠️ Hardware Requirements
 
 - **ESP32 Development Board** (ESP32-WROOM-32 or similar)
-- **USB Cable** for power from motherboard USB header
-- **Jumper Wires** for connecting to front panel header
+- **4 Jumper Wires** for connections:
+  - 1 wire: 5V from USB header to ESP32 VIN
+  - 1 wire: GND from USB header to ESP32 GND
+  - 1 wire: Power switch pin to ESP32 GPIO2
+  - 1 wire: Power LED wire to ESP32 GPIO4
 - **Small Enclosure** to mount in PC case (optional)
-- **LEDs** for status indication (optional)
+- **Status LEDs** for GPIO5 and GPIO15 (optional)
 
-## 🔌 Pin Connections
+## 🔌 Pin Connections (4-Wire Configuration)
 
 | ESP32 Pin | Connection | Description |
 |-----------|------------|-------------|
-| GPIO2     | Power Switch + | Connects to motherboard power switch pin |
-| GPIO4     | Power LED + | Reads PC power LED state |
-| GPIO5     | Status LED | ESP32 status indicator (optional) |
-| GPIO15    | WOL LED | Blinks when Wake-on-LAN packet detected |
-| 3.3V     | Power LED - | Common ground for LED reading |
-| GND       | Power Switch - | Common ground for switch control |
+| VIN       | 5V from USB header | Power supply from motherboard USB header |
+| GND       | GND from USB header | Common ground from USB header |
+| GPIO2     | Power Switch + | Connects to motherboard power switch pin (pulls LOW when needed) |
+| GPIO4     | Power LED wire | Reads PC power LED voltage (5V=OFF, 3.3V=ON) |
 
-## 📐 Wiring Diagram
+**Note**: GPIO5 (Status LED) and GPIO15 (WOL LED) are optional and can be left unconnected.
+
+## 📐 Wiring Diagram (4-Wire Configuration)
 
 ```
-ESP32                    Motherboard Front Panel Header
-┌─────────┐              ┌─────────────────────────────┐
-│         │              │                             │
-│  GPIO2  ├──────────────┤  Power Switch + (PWRBTN#)  │
-│         │              │                             │
-│  GPIO4  ├──────────────┤  Power LED + (PWR_LED+)    │
-│         │              │                             │
-│  3.3V   ├──────────────┤  Power LED - (PWR_LED-)    │
-│         │              │                             │
-│   GND   ├──────────────┤  Power Switch - (PWRBTN#)  │
-│         │              │                             │
-└─────────┘              └─────────────────────────────┘
+Motherboard USB Header          ESP32 Board
+┌─────────────────┐            ┌─────────────────┐
+│                 │            │                 │
+│   USB +5V ─────┼────────────┼─── VIN         │
+│                 │            │                 │
+│   USB GND ─────┼────────────┼─── GND          │
+│                 │            │                 │
+└─────────────────┘            └─────────────────┘
+
+Motherboard Front Panel Header  ESP32 Board
+┌─────────────────────────────┐ ┌─────────────────┐
+│                             │ │                 │
+│  PWRBTN# (Power Switch +) ─┼─┼─── GPIO2       │
+│                             │ │                 │
+│  PWR_LED+ (Power LED +) ───┼─┼─── GPIO4       │
+│                             │ │                 │
+└─────────────────────────────┘ └─────────────────┘
 ```
+
+**Key Points:**
+- **Power**: ESP32 gets 5V and GND from motherboard USB header
+- **Power Switch**: GPIO2 connects to power switch pin (pulls LOW when needed)
+- **Power LED**: GPIO4 reads power LED voltage to determine PC state
+- **No additional grounds needed** - USB header provides common ground
+- **GPIO2 Behavior**: Pin is normally floating (INPUT), changes to OUTPUT only when pulling LOW
 
 ## 📦 Installation
 

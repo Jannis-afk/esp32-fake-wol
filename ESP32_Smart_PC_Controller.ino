@@ -21,10 +21,14 @@
 #include <ESP32Ping.h>
  
  // Pin definitions
- #define POWER_SWITCH_PIN 2      // GPIO2 - connects to PC power switch
- #define POWER_LED_PIN 4         // GPIO4 - reads PC power LED state
+ #define POWER_SWITCH_PIN 2      // GPIO2 - connects to PC power switch (pull LOW to start)
+ #define POWER_LED_PIN 4         // GPIO4 - reads PC power LED state (5V=OFF, 3.3V=ON)
  #define STATUS_LED_PIN 5        // GPIO5 - ESP32 status indicator
  #define WOL_LED_PIN 15          // GPIO15 - blinks when WoL packet detected
+ 
+ // Power LED voltage thresholds
+ #define POWER_LED_OFF_THRESHOLD 3000    // 3V threshold - above this = PC OFF (5V)
+ #define POWER_LED_ON_THRESHOLD 2000     // 2V threshold - below this = PC ON (3.3V)
  
  // Configuration
  #define EEPROM_SIZE 512
@@ -764,16 +768,16 @@ unsigned long lastShutdownButtonTime = 0;
    Serial.println("ESP32 Smart PC Power Controller Starting...");
    
         // Initialize pins
-     pinMode(POWER_SWITCH_PIN, OUTPUT);
-     pinMode(POWER_LED_PIN, INPUT); // No pull-up - let external circuit control the level
+     pinMode(POWER_SWITCH_PIN, INPUT); // Start as input (floating)
+     pinMode(POWER_LED_PIN, INPUT); // Analog input for power LED voltage reading
      pinMode(STATUS_LED_PIN, OUTPUT);
      pinMode(WOL_LED_PIN, OUTPUT);
-     digitalWrite(POWER_SWITCH_PIN, HIGH); // Normally high, pull low to "press"
      digitalWrite(STATUS_LED_PIN, LOW);
      digitalWrite(WOL_LED_PIN, LOW);
      
-     // Debug power LED state
-     Serial.printf("Initial Power LED state: %s\n", digitalRead(POWER_LED_PIN) ? "HIGH" : "LOW");
+     // Debug power LED voltage
+     int powerLedVoltage = analogRead(POWER_LED_PIN) * (3300 / 4095); // Convert to mV
+     Serial.printf("Initial Power LED voltage: %d mV\n", powerLedVoltage);
    
    // Initialize EEPROM
    EEPROM.begin(EEPROM_SIZE);
@@ -843,9 +847,11 @@ unsigned long lastShutdownButtonTime = 0;
    // Simple watchdog - print status every 10 seconds
    static unsigned long lastWatchdog = 0;
    if (millis() - lastWatchdog > 10000) {
-     Serial.printf("Watchdog: State=%s, PowerLED=%s, WiFi=%s\n", 
+     int powerLedVoltage = analogRead(POWER_LED_PIN) * (3300 / 4095); // Convert to mV
+     Serial.printf("Watchdog: State=%s, PowerLED=%s (%d mV), WiFi=%s\n", 
                    getStateString(currentState).c_str(),
-                   digitalRead(POWER_LED_PIN) ? "HIGH" : "LOW",
+                   isPowerLedOn() ? "ON" : "OFF",
+                   powerLedVoltage,
                    WiFi.status() == WL_CONNECTED ? "Connected" : "AP Mode");
      lastWatchdog = millis();
    }
@@ -942,7 +948,7 @@ unsigned long lastShutdownButtonTime = 0;
    });
    
    webServer.on("/status", HTTP_GET, []() {
-       bool powerLedState = digitalRead(POWER_LED_PIN);
+       bool powerLedState = isPowerLedOn();
        bool pingResult = pingPC();
        
      String json = "{\"state\":\"" + getStateString(currentState) + "\",";
@@ -1107,7 +1113,8 @@ unsigned long lastShutdownButtonTime = 0;
      // Debug endpoint for checking pin states
      webServer.on("/debug_pins", HTTP_GET, []() {
        String json = "{";
-       json += "\"powerLedPin\":" + String(digitalRead(POWER_LED_PIN)) + ",";
+       json += "\"powerLedPin\":" + String(isPowerLedOn()) + ",";
+       json += "\"powerLedVoltage\":" + String(analogRead(POWER_LED_PIN) * (3300 / 4095)) + ",";
        json += "\"powerSwitchPin\":" + String(digitalRead(POWER_SWITCH_PIN)) + ",";
        json += "\"statusLedPin\":" + String(digitalRead(STATUS_LED_PIN)) + ",";
        json += "\"wolLedPin\":" + String(digitalRead(WOL_LED_PIN)) + ",";
@@ -1676,13 +1683,14 @@ unsigned long lastShutdownButtonTime = 0;
   Serial.println("Power button pressed");
   addLogEntry("Power button pressed manually", "power");
   
-  // Simulate button press (pull low then high)
+  // Simulate button press: temporarily set as output, pull low, then return to input (floating)
+  pinMode(POWER_SWITCH_PIN, OUTPUT);
   digitalWrite(POWER_SWITCH_PIN, LOW);
   delay(DEBOUNCE_DELAY);
-  digitalWrite(POWER_SWITCH_PIN, HIGH);
+  pinMode(POWER_SWITCH_PIN, INPUT); // Return to floating state
   
   // Determine action based on current state and power LED
-  bool powerLedState = digitalRead(POWER_LED_PIN);
+  bool powerLedState = isPowerLedOn();
   
   if (currentState == PC_OFF || currentState == PC_SHUTTING_DOWN) {
     // PC is off or shutting down - power on request
@@ -1706,16 +1714,17 @@ unsigned long lastShutdownButtonTime = 0;
    Serial.println("Force power off executed");
    
    // Hold power button down for 5 seconds
+   pinMode(POWER_SWITCH_PIN, OUTPUT);
    digitalWrite(POWER_SWITCH_PIN, LOW);
    delay(5000);
-   digitalWrite(POWER_SWITCH_PIN, HIGH);
+   pinMode(POWER_SWITCH_PIN, INPUT); // Return to floating state
    
    currentState = PC_OFF;
    lastStateChange = millis();
  }
  
  void updatePowerState() {
-   bool powerLedState = digitalRead(POWER_LED_PIN);
+   bool powerLedState = isPowerLedOn();
    static unsigned long lastPingCheck = 0;
    static bool lastPingResult = false;
    
@@ -1731,11 +1740,12 @@ unsigned long lastShutdownButtonTime = 0;
      lastPingCheck = millis();
      
      // Debug power LED reading and state
-     bool currentPowerLed = digitalRead(POWER_LED_PIN);
-     Serial.printf("Ping result: %s, Power LED: %s (raw: %d), Current State: %s\n", 
+     bool currentPowerLed = isPowerLedOn();
+     int powerLedVoltage = analogRead(POWER_LED_PIN) * (3300 / 4095); // Convert to mV
+     Serial.printf("Ping result: %s, Power LED: %s (voltage: %d mV), Current State: %s\n", 
                    lastPingResult ? "SUCCESS" : "FAILED", 
                    currentPowerLed ? "ON" : "OFF",
-                   currentPowerLed,
+                   powerLedVoltage,
                    getStateString(currentState).c_str());
      
      // Debug event timestamps
@@ -1972,6 +1982,20 @@ unsigned long lastShutdownButtonTime = 0;
      case PC_ON: return "on";
      case PC_SHUTTING_DOWN: return "shutting";
      default: return "unknown";
+   }
+ }
+ 
+ // Function to read power LED state based on voltage levels
+ bool isPowerLedOn() {
+   int powerLedVoltage = analogRead(POWER_LED_PIN) * (3300 / 4095); // Convert to mV
+   
+   if (powerLedVoltage > POWER_LED_OFF_THRESHOLD) {
+     return false; // PC is OFF (5V detected)
+   } else if (powerLedVoltage < POWER_LED_ON_THRESHOLD) {
+     return true;  // PC is ON (3.3V detected)
+   } else {
+     // In between thresholds - use previous state to avoid flickering
+     return lastPowerLedState;
    }
  }
  
