@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Captive Portal Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f0f0f0; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #1976d2;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 Captive Portal Test</h1>
+        
+        <div class="test-section">
+            <h3>ESP32 Connection Test</h3>
+            <p>ESP32 IP: <span id="esp32-ip">192.168.4.1</span></p>
+            <input type="text" id="ip-input" placeholder="Enter ESP32 IP address" value="192.168.4.1">
+            <button class="button" onclick="updateIP()">Update IP</button>
+        </div>
+        
+                 <div class="test-section">
+             <h3>Test Captive Portal Endpoints</h3>
+             <button class="button" onclick="testEndpoint('/')">Test Main Page</button>
+             <button class="button" onclick="testEndpoint('/config')">Test Config Page</button>
+             <button class="button" onclick="testEndpoint('/test')">Test Endpoint</button>
+             <button class="button" onclick="testEndpoint('/success.txt')">Test Success</button>
+         </div>
+         
+         <div class="test-section">
+             <h3>Test Wake-on-LAN</h3>
+             <button class="button" onclick="testEndpoint('/test_wol')">Test WOL Manual Trigger</button>
+             <button class="button" onclick="testEndpoint('/status')">Get Status (includes WOL info)</button>
+             <div id="wol-status" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; display: none;">
+                 <h4>WOL Status:</h4>
+                 <div id="wol-details"></div>
+             </div>
+         </div>
+        
+        <div class="test-section">
+            <h3>Test Captive Portal Redirects</h3>
+            <button class="button" onclick="testRedirect('/generate_204')">Test generate_204</button>
+            <button class="button" onclick="testRedirect('/fwlink')">Test fwlink</button>
+            <button class="button" onclick="testRedirect('/hotspot-detect.html')">Test hotspot-detect</button>
+            <button class="button" onclick="testRedirect('/ncsi.txt')">Test ncsi.txt</button>
+            <button class="button" onclick="testRedirect('/nonexistent')">Test 404 Redirect</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Manual Testing</h3>
+            <p>To test the captive portal manually:</p>
+            <ol>
+                <li>Connect to the "ESP32-PC-Controller" WiFi network</li>
+                <li>Open any website in your browser (e.g., google.com)</li>
+                <li>You should be redirected to the ESP32 configuration page</li>
+                <li>If not working, try visiting <a href="http://192.168.4.1" target="_blank">http://192.168.4.1</a> directly</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        function updateIP() {
+            const ip = document.getElementById('ip-input').value;
+            document.getElementById('esp32-ip').textContent = ip;
+        }
+        
+        function addResult(message, isSuccess = true) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isSuccess ? 'success' : 'error'}`;
+            resultDiv.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            resultsDiv.appendChild(resultDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+        
+                 async function testEndpoint(endpoint) {
+             const ip = document.getElementById('esp32-ip').textContent;
+             try {
+                 const response = await fetch(`http://${ip}${endpoint}`);
+                 if (response.ok) {
+                     const text = await response.text();
+                     addResult(`✓ ${endpoint}: ${response.status} OK (${text.length} chars)`);
+                     
+                     // Special handling for status endpoint
+                     if (endpoint === '/status') {
+                         try {
+                             const data = JSON.parse(text);
+                             displayWolStatus(data);
+                         } catch (e) {
+                             addResult('Failed to parse status JSON', false);
+                         }
+                     }
+                 } else {
+                     addResult(`✗ ${endpoint}: ${response.status} ${response.statusText}`, false);
+                 }
+             } catch (error) {
+                 addResult(`✗ ${endpoint}: Error - ${error.message}`, false);
+             }
+         }
+        
+        async function testRedirect(endpoint) {
+            const ip = document.getElementById('esp32-ip').textContent;
+            try {
+                const response = await fetch(`http://${ip}${endpoint}`, {
+                    redirect: 'manual'
+                });
+                if (response.status === 302) {
+                    const location = response.headers.get('Location') || 'No Location header';
+                    addResult(`✓ ${endpoint}: 302 redirect to ${location}`);
+                } else {
+                    addResult(`✗ ${endpoint}: ${response.status} (expected 302)`, false);
+                }
+            } catch (error) {
+                addResult(`✗ ${endpoint}: Error - ${error.message}`, false);
+            }
+        }
+        
+                 function displayWolStatus(data) {
+             const wolStatus = document.getElementById('wol-status');
+             const wolDetails = document.getElementById('wol-details');
+             
+             wolDetails.innerHTML = `
+                 <p><strong>PC State:</strong> ${data.stateText || 'Unknown'}</p>
+                 <p><strong>Power LED:</strong> ${data.powerLed ? 'ON' : 'OFF'}</p>
+                 <p><strong>WOL MAC:</strong> ${data.wolMac || 'Not configured'}</p>
+                 <p><strong>WOL Enabled:</strong> ${data.wolEnabled ? 'Yes' : 'No'}</p>
+                 <p><strong>WOL LED Blinking:</strong> ${data.wolLedBlinking ? 'Yes' : 'No'}</p>
+             `;
+             
+             wolStatus.style.display = 'block';
+         }
+         
+         // Auto-test on page load
+         window.onload = function() {
+             addResult('Page loaded. Ready to test captive portal.');
+         };
+    </script>
+</body>
+</html>

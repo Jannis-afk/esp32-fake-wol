@@ -1,0 +1,47 @@
+# ESP32 Smart PC Power Controller - Configuration Template
+
+# Fill out the information below before uploading to your ESP32
+
+## WiFi Configuration
+WIFI_SSID=your_wifi_network_name
+WIFI_PASSWORD=your_wifi_password
+
+## PC Information
+PC_MAC_ADDRESS=AA:BB:CC:DD:EE:FF
+PC_IP_ADDRESS=192.168.1.100
+
+## Optional Customizations
+# ESP32 Pin Assignments (if you want to change from defaults)
+POWER_SWITCH_PIN=2
+POWER_LED_PIN=4
+STATUS_LED_PIN=5
+
+# Timing Configuration (in milliseconds)
+PING_TIMEOUT=1000
+DEBOUNCE_DELAY=50
+
+# Network Configuration
+DNS_PORT=53
+WEB_PORT=80
+
+## Instructions:
+# 1. Replace the placeholder values above with your actual information
+# 2. Save this file
+# 3. Use the web interface to configure the ESP32, or
+# 4. Modify the code directly if you prefer
+
+## Example Configuration:
+# WIFI_SSID=MyHomeNetwork
+# WIFI_PASSWORD=MySecurePassword123
+# PC_MAC_ADDRESS=00:11:22:33:44:55
+# PC_IP_ADDRESS=192.168.1.50
+
+## Finding Your PC's MAC Address:
+# Windows: ipconfig /all
+# macOS/Linux: ifconfig
+# Look for "Physical Address" or "ether" followed by MAC
+
+## Finding Your PC's IP Address:
+# Windows: ipconfig
+# macOS/Linux: ifconfig
+# Look for "IPv4 Address" or "inet" followed by IP
